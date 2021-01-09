@@ -290,8 +290,8 @@ for i in total_data:
     
 correlation_struct = pd.DataFrame(reaction_time_corr).rename(index={0: 'Pearson', 1: 'Spearman'})
     
-
-
+ax = sns.heatmap(correlation_struct.T, cmap='mako')
+ax.set_ylim(8.0, 0)
 
 
 
