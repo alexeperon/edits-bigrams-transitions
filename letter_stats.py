@@ -244,26 +244,39 @@ grid2 = grid2.map_diag(plt.hist, bins = 10, edgecolor =  'k', color = 'lightgree
 
 reaction_times = [float(np.array(df.loc[df['spelling'] == i])[0][1]) for i in words]
 
+to_remove = [i for i, x in enumerate(reaction_times) if np.isfinite(x) == False]
+
+def remove_nan_values(list_, indices):
+    count = 0
+    for j in indices:
+        list_.pop(j-count)
+        count +=1
+    return list_
+
+remove_nan_values(reaction_times, to_remove)
+
+for i in total_data:
+    remove_nan_values(total_data[i], to_remove)
+
 
 # very basic linear regression model, to get a feel for which measure best matched reaction times
 
-def linear_regression_plot(variable, reaction_times):
+def linear_regression_plot(variable, reaction_times, length=6000):
     plt.clf()
-    x = np.array(variable).reshape((-1, 1))[:100]
-    y = np.array(reaction_times)[:100]
+    x = np.array(variable).reshape((-1, 1))[:length]
+    y = np.array(reaction_times)[:length]
 
     model = LinearRegression().fit(x, y)
     r_sq = model.score(x, y)
 
-    plt.scatter(x, y, color = "red")
-    plt.plot(x, model.predict(x), color = "green")
+    plt.scatter(x, y, color = "lightgreen")
+    plt.plot(x, model.predict(x), color = "red")
     plt.show()
     print('R squared was ' + str(r_sq))
     return r_sq
 
 for i in total_data:
-    
-    linear_regression_plot(total_data[i], reaction_times)
+    linear_regression_plot(total_data[i], reaction_times, 8000)
     print('Regression for ' + i)
     
 # Note, on the whole, pretty poor R squared results - this is either due to a small role or bad programming!
@@ -273,9 +286,9 @@ for i in total_data:
 reaction_time_corr = {}
 
 for i in total_data:
-    reaction_time_corr[i] = (pearsonr(total_data[i], reaction_times), spearmanr(total_data[i], reaction_times))
+    reaction_time_corr[i] = (pearsonr(total_data[i][:9000], reaction_times[:9000])[0], spearmanr(total_data[i][:9000], reaction_times[:9000])[0])
     
-correlation_struct = pd.DataFrameFrame(reaction_time_corr)
+correlation_struct = pd.DataFrame(reaction_time_corr).rename(index={0: 'Pearson', 1: 'Spearman'})
     
 
 
