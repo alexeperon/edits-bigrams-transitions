@@ -5,37 +5,27 @@ Created on Sun Jan  3 22:20:11 2021
 
 @author: alex
 
+Code for the edits-bigrams-transitions project
 
-
-
-INTUITION: the more certain you are about an event, the less likely it is that it can be substituted with something else ... 
-
-
-so given a of the pair ab, if you have 90% chance of getting b (NO: if you have sparse coding) then you might expect lower edit distances as fewer possibilities?!
-
-Okay, you will only get a relationship for real words. use SUBTLEX corpus!
-
-
-But, if you have w1 and w2, lower edit distance = ...?
-
-PROBLEM: edit distance is only specified with respect to another word. You can't correlate edit distance and bigram frequency in a single word.
-
-
-closest word: find word in corpus with lowest edit distance, to give each word a 'distance value' as well as bigram frequency value
-
-Might expect smaller distances to mean more frequent bigrams, as easier to find another word with similar features
-
-
+Algorithm:
+    Randomly sample 10,000 words from the BLP corpus. These are both training and testing data.
+    Create a count transition matrix
+    Work out different measures on a word level:
+        (1) Overall bigram frequency count
+        (2) Bigram frequency count, but bigram position counts
+        (3) Bigram probabilities, the independent probability of each bigram in a word multiplied
+        (4) The mean edit distance to all other words in the language
+        (5) The 'word transition probability': how likely a word is based on transitions
+        (6) Log transformation of word transition probability
+        
+    Create scatterplots and correlation matrices for each measure
+    
 """
 
-#work out the relationship between three different, but related metrics of statistical 
-#bigram frequency, transitional probability and edit distance. 
-
-
+# Import all relevant functions
 
 import random
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 from itertools import islice
 from math import log
@@ -45,16 +35,7 @@ import re
 import seaborn as sns
 
 
-
-def make_strings(des_len, lang_dict):
-    big_string = []
-    for i in lang_dict:
-        number = int(des_len * lang_dict[i])
-        to_append = [i] * number
-        big_string += to_append
-    random.shuffle(big_string)
-    return(big_string)
-        
+# Function to iterate across an entire language, creating bigram-sized windows
     
 def window(letters_list, n=2):
     lang_letters = iter(letters_list)
@@ -65,6 +46,7 @@ def window(letters_list, n=2):
             result = result[1:] + (elem,)
             yield result
        
+# Function to count the number of these windows for each bigram combination, and combine into count matrix
         
 def transition_matrix_pandas(letters_list):        
     pairs = pd.DataFrame(window(letters_list), columns=['char_n', 'char_n+1'])
@@ -72,10 +54,12 @@ def transition_matrix_pandas(letters_list):
     return (counts.unstack())   
 
 
+# Code for edit distance using dynamic programming, which iterates through a grid of two words choosing the easiest path
+    # Code written with extensive help from Wikibooks and Stackexchange
+
 def levenshtein(s1, s2):
     if len(s1) < len(s2):
         return levenshtein(s2, s1)
-    # len(s1) >= len(s2)
     if len(s2) == 0:
         return len(s1)
     previous_row = range(len(s2) + 1)
@@ -90,13 +74,38 @@ def levenshtein(s1, s2):
     return previous_row[-1]
 
 
-def get_bigram_freq(word, count_matrix):
+# Function to average edit distance across all candidates for a given word
+
+def mean_levenshtein(word,language):
+    count = 0
+    edits = 0
+    for i in language:
+        edits += levenshtein(word, i)
+        count += 1
+    return edits / count
+    
+
+# Function to take a word, and return the average bigram frequency of a bigram in the word
+
+def get_average_bigram_freq(word, count_matrix):
     total_bigram_freq = count_matrix[word[1]][word[0]]
     bigrams = len(word) - 1
     for i in range(0, bigrams):
         total_bigram_freq += count_matrix[word[i+1]][word[i]]
     return total_bigram_freq / bigrams
 
+
+# Function to return the overall bigram frequency of a word
+
+def get_total_bigram_freq(word, count_matrix):
+    total_bigram_freq = count_matrix[word[1]][word[0]]
+    bigrams = len(word) - 1
+    for i in range(0, bigrams):
+        total_bigram_freq += count_matrix[word[i+1]][word[i]]
+    return total_bigram_freq
+
+
+# Function to return the overall bigram frequency in a certain position
 
 def get_bigram_freq_position(word, total_string):
     len_word = len(word)
@@ -108,6 +117,20 @@ def get_bigram_freq_position(word, total_string):
     return count_total
 
 
+# Function to return the overall bigram frequency in a certain position, averaged across a word
+
+def get_bigram_freq_position_average(word, total_string):
+    num_bigrams = len(word) -1
+    count_total = 0
+    for i in range(0,num_bigrams):
+        regex = '\s' + '.' * i + word[i] + word[i+1]
+        count = re.findall(regex, total_string)
+        count_total += len(count)
+    return count_total / num_bigrams 
+
+
+# Function to return the overall word probability if you treat each bigram as an independent event 
+
 def get_bigram_prob(word, transitions, number_bigrams):
     bigram_freq = transitions[word[1]][word[0]]/number_bigrams
     for i in range(1, len(word)-1):
@@ -115,22 +138,17 @@ def get_bigram_prob(word, transitions, number_bigrams):
     return -log(bigram_freq,2)
 
 
+# Function to generate word probabiity based on transition probabilities: i.e. given a space, the chance of getting a given word
+
 def get_transition_probs(word, transition_probs, language_string):
-    word_prob = language_string.count(word[0])/len(language_string)
+    word_prob = language_string.count(' ' + word[0])/len(language_string)
     for i in range(0, len(word)-1):
         word_prob *= transition_probs[word[i+1]][word[i]]
     return word_prob
 
 
-def mean_levenshtein(word,language):
-    count = 0
-    edits = 0
-    for i in language:
-        edits += levenshtein(word, i)
-        count += 1
-    return edits / count
-    
-
+# Read data from the BLP (not availabe on Github, can be found on BLP site)
+    # Randomly sample 10,000 words into both a list and string
 
 df = pd.read_csv (r'BLP.csv')
 
@@ -138,26 +156,30 @@ words = list(df.iloc[:, 0])
 
 random.shuffle(words)
 
-
 words = [i for i in words if type(i) == str][:10000]
 
-
 total_string = ' '.join(words)
+
+
+# Create matrices of bigram transition counts
+# To create a righthand transition matrix, simply divide each row by its total
+# Note that spaces are included here, as the start of the word may be important later on
 
 transition_counts = transition_matrix_pandas(total_string)
 
 transition_probs = transition_counts.div(transition_counts.sum(axis=1), axis=0)
 
 
-'''
-Now expect negative correlation between edit distance and bigram frequency: i.e the more certain a word is, the fewer ways it could 
-have been otherwise.
-'''
 
+# Calculate the above metrics for each word, using the functions defined above
 
-bg_freq_list = [get_bigram_freq(i, transition_counts) for i in words]
+bg_freq_list = [get_total_bigram_freq(i, transition_counts) for i in words]
+
+bg_freq_avg_list = [get_average_bigram_freq(i, transition_counts) for i in words]
 
 bg_freq_position_list = [get_bigram_freq_position(i, total_string) for i in words]
+
+bg_freq_position_avg_list = [get_bigram_freq_position_average(i, total_string) for i in words]
 
 bg_probs_list = [get_bigram_prob(i, transition_counts, len(total_string)-2) for i in words]
 
@@ -168,9 +190,12 @@ transition_probs_list = [get_transition_probs(i, transition_probs, total_string)
 transition_probs_log_list = [-log(j,2) for j in transition_probs_list]
 
 
+# Put all data into one matrix
 
 total_data = {'Bigram Frequency Counts': bg_freq_list,
+              'Bigram Average Frequency': bg_freq_avg_list,
               'Bigram Frequency Counts with Position': bg_freq_position_list,
+              'Average Bigram Frequency Counts with Position': bg_freq_position_avg_list,
               'Bigram Independent Probabilities': bg_probs_list,
               'Mean Edit Distance': edit_distances_list,
               'Word Transition Probability': transition_probs_list,
@@ -178,56 +203,27 @@ total_data = {'Bigram Frequency Counts': bg_freq_list,
 
 total_data_struct = pd.DataFrame(total_data)
 
+
+# Calculate correlation matrices across each metric
+
 correlation_matrix_spearman = total_data_struct.corr(method='spearman')
 correlation_matrix_pearson = total_data_struct.corr(method='pearson')
+
+
+# Display all data as a grid of scatterplots and histrograms
 
 sns.pairplot(total_data_struct)
 
 
-visual_data = total_data_struct.drop(columns=['Word Transition Probability','Bigram Independent Probabilities', 'Bigram Frequency Counts'])
+# Display the three ost salient metrics with scatterplots and histograms in a grid, with the lower quarter using kernel density plots
+
+visual_data = total_data_struct.drop(columns=['Word Transition Probability','Bigram Independent Probabilities', 'Bigram Frequency Counts', 'Bigram Average Frequency'])
 
 grid = sns.PairGrid(visual_data)
-sns.set_palette("pastel")
 grid = grid.map_upper(plt.scatter, color = 'green')
 grid = grid.map_lower(sns.kdeplot, cmap = 'Greens')
 grid = grid.map_diag(plt.hist, bins = 10, edgecolor =  'k', color = 'lightgreen')
 
-
-
-'''
-
-NB: CORRELATION ONLY HIGH WITH LOG TRANSFORMATION - non linear.
-
-
-Conclusion: the more probable a word is in terms of bigrams (chance you will get that collection of bigrams) or transitions (i.e. 
-higher chance is you will get a certain word), the higher average edit distance to other words.
-
-Why is this the case?
-
-Well, you might expect that more probable words are more sparsely coded. 
-
-This means that you will have to change more letters to reach another word.
-
-For example, take 'qu'. This is certain: whenever you have a q, there is a almost 100% chance of u.
-
-likewise, if you have a 'u', by Bayesian statistics, you have a relatively high chance of having had a 'q' (in my model, 5.4%). 
-
-This creates 'islands of certainty', where to get to another word by editing letters you have to modify more than one letter.
-
-i.e. the more certain letters go together, the more you have to change to get to a new, possible word.
-
-
-Actually: key thing to remember. Probabilities here reflect the number of combinations. If a probability is high, that just means few other
-words use those combinations.
-That means you need to change more letters to get to another word. 
-
-
-
-
-
-Key question: if we are sensitive to bigrams, are we sensitive to bigram frequency?
-
-'''
 
 
 
