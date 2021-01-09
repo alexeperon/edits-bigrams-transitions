@@ -11,8 +11,10 @@ Algorithm:
     Randomly sample 10,000 words from the BLP corpus. These are both training and testing data.
     Create a count transition matrix
     Work out different measures on a word level:
-        (1) Overall bigram frequency count
-        (2) Bigram frequency count, but bigram position counts
+        (1a) Overall bigram frequency count
+        (1b) Average bigram frequency count
+        (2a) Overall bigram frequency count, but bigram position counts
+        (2b) Average bigram frequency count, but bigram position counts
         (3) Bigram probabilities, the independent probability of each bigram in a word multiplied
         (4) The mean edit distance to all other words in the language
         (5) The 'word transition probability': how likely a word is based on transitions
@@ -174,35 +176,30 @@ transition_probs = transition_counts.div(transition_counts.sum(axis=1), axis=0)
 # Calculate the above metrics for each word, using the functions defined above
 
 bg_freq_list = [get_total_bigram_freq(i, transition_counts) for i in words]
-
 bg_freq_avg_list = [get_average_bigram_freq(i, transition_counts) for i in words]
-
 bg_freq_position_list = [get_bigram_freq_position(i, total_string) for i in words]
-
 bg_freq_position_avg_list = [get_bigram_freq_position_average(i, total_string) for i in words]
-
 bg_probs_list = [get_bigram_prob(i, transition_counts, len(total_string)-2) for i in words]
-
 edit_distances_list = [mean_levenshtein(i,words) for i in words] 
-
 transition_probs_list = [get_transition_probs(i, transition_probs, total_string) for i in words]
-
 transition_probs_log_list = [-log(j,2) for j in transition_probs_list]
 
 
 # Put all data into one matrix
 
-total_data = {'Bigram Frequency Counts': bg_freq_list,
+total_data = {'Bigram Frequency': bg_freq_list,
               'Bigram Average Frequency': bg_freq_avg_list,
-              'Bigram Frequency Counts with Position': bg_freq_position_list,
-              'Average Bigram Frequency Counts with Position': bg_freq_position_avg_list,
+              'Bigram Frequency with Position': bg_freq_position_list,
+              'Bigram Average Frequency with Position': bg_freq_position_avg_list,
               'Bigram Independent Probabilities': bg_probs_list,
               'Mean Edit Distance': edit_distances_list,
-              'Word Transition Probability': transition_probs_list,
-              'Word Transition Log Probability': transition_probs_log_list}
+              'Transition Probability': transition_probs_list,
+              'Transition Log Probability': transition_probs_log_list}
 
 total_data_struct = pd.DataFrame(total_data)
 
+## Save data
+#total_data_struct.to_csv('language_data.csv')
 
 # Calculate correlation matrices across each metric
 
@@ -210,19 +207,34 @@ correlation_matrix_spearman = total_data_struct.corr(method='spearman')
 correlation_matrix_pearson = total_data_struct.corr(method='pearson')
 
 
+# Select certain categorries to put into scatterplots
+
+key_data = total_data_struct[['Bigram Frequency',
+                              'Bigram Average Frequency',
+                              'Bigram Frequency with Position',
+                              'Bigram Independent Probabilities',
+                              'Mean Edit Distance',
+                              'Transition Log Probability']]
+
 # Display all data as a grid of scatterplots and histrograms
+    # Note: this function is incredible!
 
-sns.pairplot(total_data_struct)
 
+grid1 = sns.PairGrid(key_data)
+grid1 = grid1.map_upper(sns.scatterplot)
+grid1 = grid1.map_lower(sns.kdeplot, cmap="mako_r")
+grid1 = grid1.map_diag(plt.hist, bins = 10, edgecolor =  'k', color = 'lightblue')
 
 # Display the three ost salient metrics with scatterplots and histograms in a grid, with the lower quarter using kernel density plots
 
-visual_data = total_data_struct.drop(columns=['Word Transition Probability','Bigram Independent Probabilities', 'Bigram Frequency Counts', 'Bigram Average Frequency'])
+visual_data = total_data_struct[['Bigram Frequency',
+              'Mean Edit Distance',
+              'Transition Log Probability']]
 
-grid = sns.PairGrid(visual_data)
-grid = grid.map_upper(plt.scatter, color = 'green')
-grid = grid.map_lower(sns.kdeplot, cmap = 'Greens')
-grid = grid.map_diag(plt.hist, bins = 10, edgecolor =  'k', color = 'lightgreen')
+grid2 = sns.PairGrid(visual_data)
+grid2 = grid2.map_upper(plt.scatter, color = 'green')
+grid2 = grid2.map_lower(sns.kdeplot, cmap = 'Greens')
+grid2 = grid2.map_diag(plt.hist, bins = 10, edgecolor =  'k', color = 'lightgreen')
 
 
 
