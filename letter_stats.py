@@ -34,7 +34,10 @@ from math import log
 from scipy.stats import pearsonr
 from scipy.stats import spearmanr
 import re
+import numpy as np
 import seaborn as sns
+from sklearn.linear_model import LinearRegression
+
 
 
 # Function to iterate across an entire language, creating bigram-sized windows
@@ -235,6 +238,49 @@ grid2 = sns.PairGrid(visual_data)
 grid2 = grid2.map_upper(plt.scatter, color = 'green')
 grid2 = grid2.map_lower(sns.kdeplot, cmap = 'Greens')
 grid2 = grid2.map_diag(plt.hist, bins = 10, edgecolor =  'k', color = 'lightgreen')
+
+# As a bonus, see which measure does best at measuring reaction times!
+# Let's do this by carrying out a simple linear regression on each measure, using reaction times as results
+
+reaction_times = [float(np.array(df.loc[df['spelling'] == i])[0][1]) for i in words]
+
+
+# very basic linear regression model, to get a feel for which measure best matched reaction times
+
+def linear_regression_plot(variable, reaction_times):
+    plt.clf()
+    x = np.array(variable).reshape((-1, 1))[:100]
+    y = np.array(reaction_times)[:100]
+
+    model = LinearRegression().fit(x, y)
+    r_sq = model.score(x, y)
+
+    plt.scatter(x, y, color = "red")
+    plt.plot(x, model.predict(x), color = "green")
+    plt.show()
+    print('R squared was ' + str(r_sq))
+    return r_sq
+
+for i in total_data:
+    
+    linear_regression_plot(total_data[i], reaction_times)
+    print('Regression for ' + i)
+    
+# Note, on the whole, pretty poor R squared results - this is either due to a small role or bad programming!
+
+# Let's try correlations instead.
+    
+reaction_time_corr = {}
+
+for i in total_data:
+    reaction_time_corr[i] = (pearsonr(total_data[i], reaction_times), spearmanr(total_data[i], reaction_times))
+    
+correlation_struct = pd.DataFrameFrame(reaction_time_corr)
+    
+
+
+
+
 
 
 
