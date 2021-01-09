@@ -139,7 +139,7 @@ words = list(df.iloc[:, 0])
 random.shuffle(words)
 
 
-words = [i for i in words if type(i) == str][:500]
+words = [i for i in words if type(i) == str][:10000]
 
 
 total_string = ' '.join(words)
@@ -184,7 +184,7 @@ correlation_matrix_pearson = total_data_struct.corr(method='pearson')
 sns.pairplot(total_data_struct)
 
 
-visual_data = total_data_struct.drop(columns='Word Transition Probability','Bigram Independent Probabilities', 'Bigram Frequency Counts')
+visual_data = total_data_struct.drop(columns=['Word Transition Probability','Bigram Independent Probabilities', 'Bigram Frequency Counts'])
 
 grid = sns.PairGrid(visual_data)
 sns.set_palette("pastel")
