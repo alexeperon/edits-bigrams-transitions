@@ -37,6 +37,8 @@ import re
 import numpy as np
 import seaborn as sns
 from sklearn.linear_model import LinearRegression
+import statsmodels.api as sm
+from statsmodels.formula.api import ols
 
 
 
@@ -88,7 +90,7 @@ def mean_levenshtein(word,language):
         edits += levenshtein(word, i)
         count += 1
     return edits / count
-    
+
 
 # Function to take a word, and return the average bigram frequency of a bigram in the word
 
@@ -140,8 +142,7 @@ def get_bigram_prob(word, transitions, number_bigrams):
     bigram_freq = transitions[word[1]][word[0]]/number_bigrams
     for i in range(1, len(word)-1):
         bigram_freq *= transitions[word[i+1]][word[i]]/number_bigrams
-    return -log(bigram_freq,2)
-
+    return bigram_freq
 
 # Function to generate word probabiity based on transition probabilities: i.e. given a space, the chance of getting a given word
 
@@ -149,7 +150,17 @@ def get_transition_probs(word, transition_probs, language_string):
     word_prob = language_string.count(' ' + word[0])/len(language_string)
     for i in range(0, len(word)-1):
         word_prob *= transition_probs[word[i+1]][word[i]]
+    word_prob *= transition_probs[' '][word[-1]]
     return word_prob
+
+# Function to find the average transition probability of a word
+
+def get_avg_transition_probs(word, transition_probs, language_string):
+    word_prob = language_string.count(' ' + word[0])/len(language_string)
+    for i in range(0, len(word)-1):
+        word_prob *= transition_probs[word[i+1]][word[i]]
+    word_prob *= transition_probs[' '][word[-1]]
+    return word_prob ** (1/(len(word)+1))
 
 
 # Read data from the BLP (not availabe on Github, can be found on BLP site)
@@ -161,7 +172,7 @@ words = list(df.iloc[:, 0])
 
 random.shuffle(words)
 
-words = [i for i in words if type(i) == str][:10000]
+words = [i for i in words if type(i) == str][:6000]
 
 total_string = ' '.join(words)
 
@@ -178,13 +189,21 @@ transition_probs = transition_counts.div(transition_counts.sum(axis=1), axis=0)
 
 # Calculate the above metrics for each word, using the functions defined above
 
+word_lengths = [len(i) for i in words]
+
 bg_freq_list = [get_total_bigram_freq(i, transition_counts) for i in words]
 bg_freq_avg_list = [get_average_bigram_freq(i, transition_counts) for i in words]
 bg_freq_position_list = [get_bigram_freq_position(i, total_string) for i in words]
 bg_freq_position_avg_list = [get_bigram_freq_position_average(i, total_string) for i in words]
 bg_probs_list = [get_bigram_prob(i, transition_counts, len(total_string)-2) for i in words]
+
 edit_distances_list = [mean_levenshtein(i,words) for i in words] 
+#edit_distances_scaled = [edit_distances_list[j]/word_lengths[j] for j in range(0, len(word_lengths))]
+
 transition_probs_list = [get_transition_probs(i, transition_probs, total_string) for i in words]
+transition_avg_probs_list = [get_avg_transition_probs(i, transition_probs, total_string) for i in words]
+transition_avg_probs_log_list = [-log(j,2) for j in transition_avg_probs_list]
+
 transition_probs_log_list = [-log(j,2) for j in transition_probs_list]
 
 
@@ -196,8 +215,12 @@ total_data = {'Bigram Frequency': bg_freq_list,
               'Bigram Average Frequency with Position': bg_freq_position_avg_list,
               'Bigram Independent Probabilities': bg_probs_list,
               'Mean Edit Distance': edit_distances_list,
+#              'Edit Distance Scaled': edit_distances_scaled,
               'Transition Probability': transition_probs_list,
-              'Transition Log Probability': transition_probs_log_list}
+              'Transition Log Probability': transition_probs_log_list,
+              'Average Transition Probability': transition_avg_probs_list,
+              'Average Transition Log Probability': transition_avg_probs_log_list,
+              'Word Length': word_lengths}
 
 total_data_struct = pd.DataFrame(total_data)
 
@@ -213,11 +236,21 @@ correlation_matrix_pearson = total_data_struct.corr(method='pearson')
 # Select certain categorries to put into scatterplots
 
 key_data = total_data_struct[['Bigram Frequency',
-                              'Bigram Average Frequency',
                               'Bigram Frequency with Position',
-                              'Bigram Independent Probabilities',
                               'Mean Edit Distance',
+                              'Transition Probability',
                               'Transition Log Probability']]
+
+normalised_data = total_data_struct[['Bigram Average Frequency',
+                                   'Bigram Average Frequency with Position',
+                                   'Mean Edit Distance',
+                                   'Average Transition Probability',
+                                   'Average Transition Log Probability',
+                                   'Word Length']]
+
+norm_correlation_matrix_spearman = normalised_data.corr(method='spearman')
+
+key_correlation_matrix_spearman = key_data.corr(method='spearman')
 
 # Display all data as a grid of scatterplots and histrograms
     # Note: this function is incredible!
@@ -230,14 +263,14 @@ grid1 = grid1.map_diag(plt.hist, bins = 10, edgecolor =  'k', color = 'lightblue
 
 # Display the three ost salient metrics with scatterplots and histograms in a grid, with the lower quarter using kernel density plots
 
-visual_data = total_data_struct[['Bigram Frequency',
+visual_data = total_data_struct[['Bigram Frequency with Position',
               'Mean Edit Distance',
               'Transition Log Probability']]
 
 grid2 = sns.PairGrid(visual_data)
-grid2 = grid2.map_upper(plt.scatter, color = 'green')
-grid2 = grid2.map_lower(sns.kdeplot, cmap = 'Greens')
-grid2 = grid2.map_diag(plt.hist, bins = 10, edgecolor =  'k', color = 'lightgreen')
+grid2 = grid2.map_upper(plt.scatter, color = 'red')
+grid2 = grid2.map_lower(sns.kdeplot, cmap = 'Reds')
+grid2 = grid2.map_diag(plt.hist, bins = 10, edgecolor =  'k', color = 'red')
 
 # As a bonus, see which measure does best at measuring reaction times!
 # Let's do this by carrying out a simple linear regression on each measure, using reaction times as results
@@ -289,11 +322,19 @@ for i in total_data:
     reaction_time_corr[i] = (pearsonr(total_data[i][:9000], reaction_times[:9000])[0], spearmanr(total_data[i][:9000], reaction_times[:9000])[0])
     
 correlation_struct = pd.DataFrame(reaction_time_corr).rename(index={0: 'Pearson', 1: 'Spearman'})
-    
+ 
+# Generate correlation matrices
+   
 ax = sns.heatmap(correlation_struct.T, cmap='mako')
 ax.set_ylim(8.0, 0)
 
+ax1 = sns.heatmap(correlation_matrix_pearson, cmap='plasma')
+ax1.set_ylim(8.0, 0)
 
+ax2 = sns.heatmap(correlation_matrix_spearman, cmap='plasma')
+ax2.set_ylim(8.0, 0)
+
+# Carry out a quick ANOVA to ask if different measures impact reaction time 
 
 
 
